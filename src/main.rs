@@ -1,3 +1,5 @@
+use pong::RenderEngine;
+
 fn main() {
-    println!("Hello, world!");
+    let render_engine = RenderEngine::new();
 }
