@@ -1,7 +1,9 @@
 use std::sync::Arc;
 
-use vulkano::{device::{Device, DeviceCreateInfo, Queue, QueueCreateInfo, QueueFlags}, instance::{Instance, InstanceCreateFlags, InstanceCreateInfo}, swapchain::Surface, VulkanLibrary};
-use winit::{event::{Event, WindowEvent}, event_loop::{ControlFlow, EventLoop}};
+use vulkano::{device::{physical::{self, PhysicalDevice}, Device, DeviceCreateInfo, DeviceExtensions, Queue, QueueCreateInfo, QueueFlags}, instance::{Instance, InstanceCreateFlags, InstanceCreateInfo}, swapchain::Surface, VulkanLibrary};
+use winit::{event::{Event, WindowEvent}, event_loop::EventLoop};
+
+use crate::GameObject;
 
 pub struct RenderEngine {
     device: Arc<Device>,
@@ -25,17 +27,19 @@ impl RenderEngine {
         )
         .expect("Failed to create instance");
 
-        let physical_device = instance.clone()
-            .enumerate_physical_devices()
-            .expect("Failed to enumerate physical devices")
-            .next()
-            .expect("No physical device found");
+        let window = Arc::new(event_loop.create_window(Default::default()).expect("Failed to create window"));
+        let surface = Surface::from_window(instance.clone(), window).expect("Failed to create surface");
 
-        let queue_family_index = physical_device
-            .queue_family_properties()
-            .iter()
-            .position(|q| q.queue_flags.contains(QueueFlags::GRAPHICS))
-            .expect("No graphical queue family found") as u32;
+        let device_extensions = DeviceExtensions {
+            khr_swapchain: true,
+            ..DeviceExtensions::empty()
+        };
+
+        let (physical_device, queue_family_index) = select_physical_device(
+            &instance,
+            &surface,
+            &device_extensions
+        );
 
         let (device, mut queues) = Device::new(
             physical_device, 
@@ -50,9 +54,6 @@ impl RenderEngine {
         .expect("Failed to create device");
 
         let queue = queues.next().unwrap();
-
-        let window = Arc::new(event_loop.create_window(Default::default()).expect("Failed to create window"));
-        let surface = Surface::from_window(instance, window).expect("Failed to create surface");
 
         event_loop.run(|event, event_loop| {
             match event {
@@ -70,7 +71,35 @@ impl RenderEngine {
         Self { device , queue, surface }
     }
 
-    pub fn render() {
+    pub fn render(&self, game_object: &GameObject) {
         todo!()
     }
+}
+
+fn select_physical_device(
+    instance: &Arc<Instance>,
+    surface: &Arc<Surface>,
+    device_extensions: &DeviceExtensions,
+) -> (Arc<PhysicalDevice>, u32) {
+    instance
+        .enumerate_physical_devices()
+        .expect("Failed to enumerate physical devices")
+        .filter(|device| device.supported_extensions().contains(&device_extensions))
+        .filter_map(|device| {
+            device.queue_family_properties()
+                .iter()
+                .enumerate()
+                .position(|(i, q)| {
+                    q.queue_flags.contains(QueueFlags::GRAPHICS) && device.surface_support(i as u32, &surface).unwrap()
+                })
+                .map(|q| (device, q as u32))
+        })
+        .min_by_key(|(device, _)| match device.properties().device_type {
+            physical::PhysicalDeviceType::DiscreteGpu => 0,
+            physical::PhysicalDeviceType::IntegratedGpu => 1,
+            physical::PhysicalDeviceType::VirtualGpu => 2,
+            physical::PhysicalDeviceType::Cpu => 3,
+            _ => 4,
+        })
+        .expect("No physical device found")
 }
