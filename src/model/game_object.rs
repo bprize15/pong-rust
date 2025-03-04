@@ -1,4 +1,4 @@
-use crate::RenderEngine;
+use crate::render_engine::RenderEngine;
 
 pub struct GameObject {
     pub height: usize,
