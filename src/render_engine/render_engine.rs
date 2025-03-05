@@ -103,19 +103,8 @@ impl RenderEngine {
         let memory_allocator = Arc::new(StandardMemoryAllocator::new_default(device.clone()));
         let command_buffer_allocator = Arc::new(StandardCommandBufferAllocator::new(device.clone(), Default::default()));
 
-        let top_left = MyVertex {
-            position: [-1.0, 1.0]
-        };
-        let top_right = MyVertex {
-            position: [0.0, 1.0]
-        };
-        let bottom_left = MyVertex {
-            position: [-1.0, -1.0]
-        };
-        let bottom_right = MyVertex {
-            position: [0.0, -1.0]
-        };
-        let initial_vertex_buffer = get_vertex_buffer([top_left, top_right, bottom_left, bottom_right], memory_allocator.clone());
+        let game_object = GameObject::new(0, 0, 0, 0);
+        let (vertex_buffer, index_buffer) = get_game_object_buffers(&game_object, memory_allocator);
 
         let pipeline = get_pipeline(
             device.clone(), 
@@ -130,7 +119,8 @@ impl RenderEngine {
             &queue, 
             &pipeline, 
             &framebuffers, 
-            &initial_vertex_buffer
+            &vertex_buffer,
+            &index_buffer
         );
 
         event_loop.run(move |event, _, control_flow| {
@@ -178,7 +168,8 @@ impl RenderEngine {
                                 &queue,
                                 &new_pipeline, 
                                 &new_framebuffers, 
-                                &initial_vertex_buffer
+                                &vertex_buffer,
+                                &index_buffer
                             );
 
                             let (image_i, suboptimal, acquire_future) =
@@ -405,7 +396,8 @@ fn get_command_buffers(
     queue: &Arc<Queue>,
     pipeline: &Arc<GraphicsPipeline>,
     framebuffers: &[Arc<Framebuffer>],
-    vertex_buffer: &Subbuffer<[MyVertex]>
+    vertex_buffer: &Subbuffer<[MyVertex]>,
+    index_buffer: &Subbuffer<[u32]>
 ) -> Vec<Arc<PrimaryAutoCommandBuffer>> {
     framebuffers
         .iter()
@@ -433,7 +425,9 @@ fn get_command_buffers(
                 .unwrap()
                 .bind_vertex_buffers(0, vertex_buffer.clone())
                 .unwrap()
-                .draw(vertex_buffer.len() as u32, 1, 0, 0)
+                .bind_index_buffer(index_buffer.clone())
+                .unwrap()
+                .draw_indexed(index_buffer.len() as u32, 1, 0, 0, 0)
                 .unwrap()
                 .end_render_pass(SubpassEndInfo::default())
                 .unwrap();
@@ -443,8 +437,21 @@ fn get_command_buffers(
         .collect()
 }
 
-fn get_vertex_buffer(vertices: [MyVertex; 4], memory_allocator: Arc<GenericMemoryAllocator<FreeListAllocator>>) -> Subbuffer<[MyVertex]> {
-    Buffer::from_iter(
+fn get_game_object_buffers(game_object: &GameObject, memory_allocator: Arc<GenericMemoryAllocator<FreeListAllocator>>) -> (Subbuffer<[MyVertex]>, Subbuffer<[u32]>) {
+    let top_left = MyVertex {
+        position: [-1.0, 1.0]
+    };
+    let top_right = MyVertex {
+        position: [0.0, 1.0]
+    };
+    let bottom_left = MyVertex {
+        position: [-1.0, -1.0]
+    };
+    let bottom_right = MyVertex {
+        position: [0.0, -1.0]
+    };
+
+    let vertex_buffer = Buffer::from_iter(
         memory_allocator.clone(),
         BufferCreateInfo {
             usage: BufferUsage::VERTEX_BUFFER,
@@ -454,7 +461,23 @@ fn get_vertex_buffer(vertices: [MyVertex; 4], memory_allocator: Arc<GenericMemor
             memory_type_filter: MemoryTypeFilter::PREFER_DEVICE | MemoryTypeFilter::HOST_SEQUENTIAL_WRITE,
             ..Default::default()
         }, 
-        vertices
+        vec![top_left, top_right, bottom_left, bottom_right]
     )
-    .unwrap()
+    .unwrap();
+
+    let index_buffer = Buffer::from_iter(
+        memory_allocator.clone(),
+        BufferCreateInfo {
+            usage: BufferUsage::INDEX_BUFFER,
+            ..Default::default()
+        }, 
+        AllocationCreateInfo {
+            memory_type_filter: MemoryTypeFilter::PREFER_DEVICE | MemoryTypeFilter::HOST_SEQUENTIAL_WRITE,
+            ..Default::default()
+        }, 
+        vec![0, 2, 3, 0, 1, 3]
+    )
+    .unwrap();
+
+    (vertex_buffer, index_buffer)
 }
