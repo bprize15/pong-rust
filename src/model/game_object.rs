@@ -1,14 +1,14 @@
 use crate::render_engine::RenderEngine;
 
 pub struct GameObject {
-    pub height: usize,
-    pub width: usize,
-    pub x: usize,
-    pub y: usize
+    pub height: f32,
+    pub width: f32,
+    pub x: f32,
+    pub y: f32
 }
 
 impl GameObject {
-    pub fn new(height: usize , width: usize, x: usize, y: usize) -> Self {
+    pub fn new(height: f32 , width: f32, x: f32, y: f32) -> Self {
         Self { height, width, x, y }
     }
 
@@ -16,7 +16,7 @@ impl GameObject {
         render_engine.render(self);
     }
 
-    pub fn move_vertically(&mut self, new_y: usize) {
+    pub fn move_vertically(&mut self, new_y: f32) {
         self.y = new_y;
     }
 }

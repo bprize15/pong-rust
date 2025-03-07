@@ -86,7 +86,7 @@ impl RenderEngine {
         .unwrap();
 
         let render_pass = get_render_pass(device.clone(), &swapchain);
-        let framebuffers = get_framebuffers(&images, &render_pass);
+        let mut framebuffers = get_framebuffers(&images, &render_pass);
 
         let mut viewport = Viewport {
             offset: [0.0, 0.0],
@@ -97,16 +97,16 @@ impl RenderEngine {
         let vertex_shader = vertex_shader::load(device.clone()).expect("Failed to load vertex shader");
         let fragment_shader = fragment_shader::load(device.clone()).expect("Failed to load fragment shader");
 
-        let mut window_resized = false;
         let mut recreate_swapchain = false;
+        let mut window_resized = false;
 
         let memory_allocator = Arc::new(StandardMemoryAllocator::new_default(device.clone()));
         let command_buffer_allocator = Arc::new(StandardCommandBufferAllocator::new(device.clone(), Default::default()));
 
-        let game_object = GameObject::new(0, 0, 0, 0);
-        let (vertex_buffer, index_buffer) = get_game_object_buffers(&game_object, memory_allocator);
+        let mut game_object = GameObject::new(1.0, 0.1, -0.8, 0.8);
+        let (vertex_buffer, index_buffer) = get_game_object_buffers(&game_object, memory_allocator.clone());
 
-        let pipeline = get_pipeline(
+        let mut pipeline = get_pipeline(
             device.clone(), 
             vertex_shader.clone(),
             fragment_shader.clone(),
@@ -131,14 +131,12 @@ impl RenderEngine {
                 } => {
                     *control_flow = ControlFlow::Exit;
                 },
-                Event::WindowEvent { 
-                    event: WindowEvent::Resized(..),
-                    ..
-                } => {
-                    window_resized = true;
-                },
                 Event::MainEventsCleared => {
-                    if window_resized || recreate_swapchain {
+                    game_object.move_vertically(game_object. y + 0.01);
+                    // recreate vertex_buffer
+                    // recreate command buffers
+
+                    if recreate_swapchain {
                         recreate_swapchain = false;
 
                         let new_dimensions = window.inner_size();
@@ -150,68 +148,72 @@ impl RenderEngine {
                             })
                             .expect("Failed to recreate swapchain {e}");
                         swapchain = new_swapchain;
-                        let new_framebuffers = get_framebuffers(&new_images, &render_pass);
+                        framebuffers = get_framebuffers(&new_images, &render_pass);
 
-                        if window_resized {
+                        if (window_resized) {
                             window_resized = false;
 
-                            viewport.extent = new_dimensions.into();
-                            let new_pipeline = get_pipeline(
+                            pipeline = get_pipeline(
                                 device.clone(), 
                                 vertex_shader.clone(), 
                                 fragment_shader.clone(), 
                                 render_pass.clone(), 
                                 viewport.clone()
                             );
-                            command_buffers = get_command_buffers(
-                                &command_buffer_allocator, 
-                                &queue,
-                                &new_pipeline, 
-                                &new_framebuffers, 
-                                &vertex_buffer,
-                                &index_buffer
-                            );
 
-                            let (image_i, suboptimal, acquire_future) =
-                                match swapchain::acquire_next_image(swapchain.clone(), None)
-                                    .map_err(Validated::unwrap)
-                                {
-                                    Ok(r) => r,
-                                    Err(VulkanError::OutOfDate) => {
-                                        recreate_swapchain = true;
-                                        return;
-                                    },
-                                    Err(e) => panic!("Failed to acquire next image {e}")
-                                };
-
-                            if suboptimal {
-                                recreate_swapchain = true;
-                            }
-
-                            let execution = sync::now(device.clone())
-                                .join(acquire_future)
-                                .then_execute(queue.clone(), command_buffers[image_i as usize].clone())
-                                .unwrap()
-                                .then_swapchain_present(
-                                    queue.clone(), 
-                                    SwapchainPresentInfo::swapchain_image_index(swapchain.clone(), image_i)
-                                )
-                                .then_signal_fence_and_flush();
-
-                            match execution.map_err(Validated::unwrap) {
-                                Ok(future) => {
-                                    future.wait(None).unwrap();
-                                },
-                                Err(VulkanError::OutOfDate) => {
-                                    recreate_swapchain = true;
-                                },
-                                Err(e) => {
-                                    println!("Failed to flush future: {e}");
-                                }
-                            }
+                            viewport.extent = new_dimensions.into();
                         }
                     }
-                },
+                    
+                    let (new_vertex_buffer, _) = get_game_object_buffers(&game_object, memory_allocator.clone());
+
+                    command_buffers = get_command_buffers(
+                        &command_buffer_allocator, 
+                        &queue,
+                        &pipeline, 
+                        &framebuffers, 
+                        &new_vertex_buffer,
+                        &index_buffer
+                    );
+
+                    let (image_i, suboptimal, acquire_future) =
+                        match swapchain::acquire_next_image(swapchain.clone(), None)
+                            .map_err(Validated::unwrap)
+                        {
+                            Ok(r) => r,
+                            Err(VulkanError::OutOfDate) => {
+                                recreate_swapchain = true;
+                                return;
+                            },
+                            Err(e) => panic!("Failed to acquire next image {e}")
+                        };
+
+                    if suboptimal {
+                        recreate_swapchain = true;
+                    }
+
+                    let execution = sync::now(device.clone())
+                        .join(acquire_future)
+                        .then_execute(queue.clone(), command_buffers[image_i as usize].clone())
+                        .unwrap()
+                        .then_swapchain_present(
+                            queue.clone(), 
+                            SwapchainPresentInfo::swapchain_image_index(swapchain.clone(), image_i)
+                        )
+                        .then_signal_fence_and_flush();
+
+                    match execution.map_err(Validated::unwrap) {
+                        Ok(future) => {
+                            future.wait(None).unwrap();
+                        },
+                        Err(VulkanError::OutOfDate) => {
+                            recreate_swapchain = true;
+                        },
+                        Err(e) => {
+                            println!("Failed to flush future: {e}");
+                        }
+                    }
+                }
                 _ => ()
             }
         });
@@ -439,16 +441,16 @@ fn get_command_buffers(
 
 fn get_game_object_buffers(game_object: &GameObject, memory_allocator: Arc<GenericMemoryAllocator<FreeListAllocator>>) -> (Subbuffer<[MyVertex]>, Subbuffer<[u32]>) {
     let top_left = MyVertex {
-        position: [-1.0, 1.0]
+        position: [game_object.x, game_object.y]
     };
     let top_right = MyVertex {
-        position: [0.0, 1.0]
+        position: [game_object.x + game_object.width, game_object.y]
     };
     let bottom_left = MyVertex {
-        position: [-1.0, -1.0]
+        position: [game_object.x, game_object.y - game_object.height]
     };
     let bottom_right = MyVertex {
-        position: [0.0, -1.0]
+        position: [game_object.x + game_object.width, game_object.y - game_object.height]
     };
 
     let vertex_buffer = Buffer::from_iter(
