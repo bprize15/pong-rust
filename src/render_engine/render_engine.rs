@@ -1,26 +1,30 @@
 use std::sync::Arc;
 
-use vulkano::{buffer::{Buffer, BufferContents, BufferCreateInfo, BufferUsage, Subbuffer}, command_buffer::{self, allocator::StandardCommandBufferAllocator, AutoCommandBufferBuilder, CommandBufferUsage, PrimaryAutoCommandBuffer, RenderPassBeginInfo, SubpassBeginInfo, SubpassContents, SubpassEndInfo}, device::{physical::{self, PhysicalDevice}, Device, DeviceCreateInfo, DeviceExtensions, Queue, QueueCreateInfo, QueueFlags}, format, image::{view::ImageView, Image, ImageUsage}, instance::{Instance, InstanceCreateFlags, InstanceCreateInfo}, memory::allocator::{AllocationCreateInfo, FreeListAllocator, GenericMemoryAllocator, MemoryTypeFilter, StandardMemoryAllocator}, pipeline::{graphics::{color_blend::{ColorBlendAttachmentState, ColorBlendState}, input_assembly::InputAssemblyState, multisample::MultisampleState, rasterization::RasterizationState, vertex_input::{Vertex, VertexDefinition}, viewport::{Viewport, ViewportState}, GraphicsPipelineCreateInfo}, layout::PipelineDescriptorSetLayoutCreateInfo, GraphicsPipeline, PipelineLayout, PipelineShaderStageCreateInfo}, render_pass::{Framebuffer, FramebufferCreateInfo, RenderPass, Subpass}, shader::ShaderModule, swapchain::{self, Surface, Swapchain, SwapchainCreateInfo, SwapchainPresentInfo}, sync::{self, GpuFuture}, Validated, VulkanError, VulkanLibrary};
-use winit::{event::{Event, WindowEvent}, event_loop::{ControlFlow, EventLoop}, window::WindowBuilder};
+use vulkano::{buffer::{Buffer, BufferContents, BufferCreateInfo, BufferUsage, Subbuffer}, command_buffer::{allocator::StandardCommandBufferAllocator, AutoCommandBufferBuilder, CommandBufferUsage, PrimaryAutoCommandBuffer, RenderPassBeginInfo, SubpassBeginInfo, SubpassContents, SubpassEndInfo}, device::{physical::{self, PhysicalDevice}, Device, DeviceCreateInfo, DeviceExtensions, Queue, QueueCreateInfo, QueueFlags}, image::{view::ImageView, Image, ImageUsage}, instance::{Instance, InstanceCreateFlags, InstanceCreateInfo}, memory::allocator::{AllocationCreateInfo, FreeListAllocator, GenericMemoryAllocator, MemoryTypeFilter, StandardMemoryAllocator}, pipeline::{graphics::{color_blend::{ColorBlendAttachmentState, ColorBlendState}, input_assembly::InputAssemblyState, multisample::MultisampleState, rasterization::RasterizationState, vertex_input::{Vertex, VertexDefinition}, viewport::{Viewport, ViewportState}, GraphicsPipelineCreateInfo}, layout::PipelineDescriptorSetLayoutCreateInfo, GraphicsPipeline, PipelineLayout, PipelineShaderStageCreateInfo}, render_pass::{Framebuffer, FramebufferCreateInfo, RenderPass, Subpass}, shader::ShaderModule, swapchain::{self, Surface, Swapchain, SwapchainCreateInfo, SwapchainPresentInfo}, sync::{self, GpuFuture}, Validated, VulkanError, VulkanLibrary};
+use winit::{event_loop::EventLoop, window::{Window, WindowBuilder}};
 
 use crate::GameObject;
 
 pub struct RenderEngine {
     device: Arc<Device>,
     queue: Arc<Queue>,
-    surface: Arc<Surface>,
     swapchain: Arc<Swapchain>,
-    images: Vec<Arc<Image>>,
     memory_allocator: Arc<GenericMemoryAllocator<FreeListAllocator>>, // TODO: See if free list allocator crashes after a while because of memory fragmentation,
-    command_buffer_allocator: Arc<StandardCommandBufferAllocator>
+    command_buffer_allocator: Arc<StandardCommandBufferAllocator>,
+    pipeline: Arc<GraphicsPipeline>,
+    window: Arc<Window>,
+    viewport: Viewport,
+    vertex_shader: Arc<ShaderModule>,
+    fragment_shader: Arc<ShaderModule>,
+    render_pass: Arc<RenderPass>,
+    framebuffers: Vec<Arc<Framebuffer>>,
+    recreate_swapchain: bool
 }
 
 impl RenderEngine {
-    pub fn new() -> () {
-        let event_loop = EventLoop::new();
-
+    pub fn new(event_loop: &EventLoop<()>) -> RenderEngine {
         let library = VulkanLibrary::new().expect("No Vulkan library found");
-        let required_extensions = Surface::required_extensions(&event_loop);
+        let required_extensions = Surface::required_extensions(event_loop);
         let instance = Instance::new(
             library,
             InstanceCreateInfo {
@@ -31,7 +35,7 @@ impl RenderEngine {
         )
         .expect("Failed to create instance");
 
-        let window = Arc::new(WindowBuilder::new().build(&event_loop).expect("Failed to create window"));
+        let window = Arc::new(WindowBuilder::new().build(event_loop).expect("Failed to create window"));
         let surface = Surface::from_window(instance.clone(), window.clone()).expect("Failed to create surface");
 
         let device_extensions = DeviceExtensions {
@@ -71,7 +75,7 @@ impl RenderEngine {
             .unwrap()[0]
             .0;
 
-        let (mut swapchain, images) = Swapchain::new(
+        let (swapchain, images) = Swapchain::new(
             device.clone(),
             surface.clone(),
             SwapchainCreateInfo {
@@ -86,9 +90,9 @@ impl RenderEngine {
         .unwrap();
 
         let render_pass = get_render_pass(device.clone(), &swapchain);
-        let mut framebuffers = get_framebuffers(&images, &render_pass);
+        let framebuffers = get_framebuffers(&images, &render_pass);
 
-        let mut viewport = Viewport {
+        let viewport = Viewport {
             offset: [0.0, 0.0],
             extent: window.inner_size().into(),
             depth_range: 0.0..=1.0
@@ -97,16 +101,10 @@ impl RenderEngine {
         let vertex_shader = vertex_shader::load(device.clone()).expect("Failed to load vertex shader");
         let fragment_shader = fragment_shader::load(device.clone()).expect("Failed to load fragment shader");
 
-        let mut recreate_swapchain = false;
-        let mut window_resized = false;
-
         let memory_allocator = Arc::new(StandardMemoryAllocator::new_default(device.clone()));
         let command_buffer_allocator = Arc::new(StandardCommandBufferAllocator::new(device.clone(), Default::default()));
 
-        let mut game_object = GameObject::new(1.0, 0.1, -0.8, 0.8);
-        let (vertex_buffer, index_buffer) = get_game_object_buffers(&game_object, memory_allocator.clone());
-
-        let mut pipeline = get_pipeline(
+        let pipeline = get_pipeline(
             device.clone(), 
             vertex_shader.clone(),
             fragment_shader.clone(),
@@ -114,128 +112,106 @@ impl RenderEngine {
             viewport.clone()
         );
 
-        let mut command_buffers = get_command_buffers(
-            &command_buffer_allocator, 
-            &queue, 
-            &pipeline, 
-            &framebuffers, 
+        Self {
+            device,
+            queue,
+            swapchain,
+            memory_allocator,
+            command_buffer_allocator,
+            pipeline,
+            window,
+            viewport,
+            vertex_shader,
+            fragment_shader,
+            render_pass,
+            framebuffers,
+            recreate_swapchain: false
+        }
+    }
+
+    pub fn render(&mut self, game_object: &GameObject) {
+        if self.recreate_swapchain {
+            self.recreate_swapchain();
+        }
+
+        let (vertex_buffer, index_buffer) = get_game_object_buffers(&game_object, self.memory_allocator.clone());
+
+        // TODO: no need to recreate index buffer
+        let command_buffers = get_command_buffers(
+            &self.command_buffer_allocator, 
+            &self.queue,
+            &self.pipeline, 
+            &self.framebuffers, 
             &vertex_buffer,
             &index_buffer
         );
 
-        event_loop.run(move |event, _, control_flow| {
-            match event {
-                Event::WindowEvent { 
-                    event: WindowEvent::CloseRequested,
-                    ..
-                } => {
-                    *control_flow = ControlFlow::Exit;
+        let (image_i, suboptimal, acquire_future) =
+            match swapchain::acquire_next_image(self.swapchain.clone(), None)
+                .map_err(Validated::unwrap)
+            {
+                Ok(r) => r,
+                Err(VulkanError::OutOfDate) => {
+                    self.recreate_swapchain = true;
+                    return;
                 },
-                Event::MainEventsCleared => {
-                    game_object.move_vertically(game_object. y + 0.01);
-                    // recreate vertex_buffer
-                    // recreate command buffers
+                Err(e) => panic!("Failed to acquire next image {e}")
+            };
+        
+        if suboptimal {
+            self.recreate_swapchain = true;
+        }
 
-                    if recreate_swapchain {
-                        recreate_swapchain = false;
+        let execution = sync::now(self.device.clone())
+            .join(acquire_future)
+            .then_execute(self.queue.clone(), command_buffers[image_i as usize].clone())
+            .unwrap()
+            .then_swapchain_present(
+                self.queue.clone(), 
+                SwapchainPresentInfo::swapchain_image_index(self.swapchain.clone(), image_i)
+            )
+            .then_signal_fence_and_flush();
 
-                        let new_dimensions = window.inner_size();
-
-                        let (new_swapchain, new_images) = swapchain
-                            .recreate(SwapchainCreateInfo {
-                                image_extent: new_dimensions.into(),
-                                ..swapchain.create_info()
-                            })
-                            .expect("Failed to recreate swapchain {e}");
-                        swapchain = new_swapchain;
-                        framebuffers = get_framebuffers(&new_images, &render_pass);
-
-                        if (window_resized) {
-                            window_resized = false;
-
-                            pipeline = get_pipeline(
-                                device.clone(), 
-                                vertex_shader.clone(), 
-                                fragment_shader.clone(), 
-                                render_pass.clone(), 
-                                viewport.clone()
-                            );
-
-                            viewport.extent = new_dimensions.into();
-                        }
-                    }
-                    
-                    let (new_vertex_buffer, _) = get_game_object_buffers(&game_object, memory_allocator.clone());
-
-                    command_buffers = get_command_buffers(
-                        &command_buffer_allocator, 
-                        &queue,
-                        &pipeline, 
-                        &framebuffers, 
-                        &new_vertex_buffer,
-                        &index_buffer
-                    );
-
-                    let (image_i, suboptimal, acquire_future) =
-                        match swapchain::acquire_next_image(swapchain.clone(), None)
-                            .map_err(Validated::unwrap)
-                        {
-                            Ok(r) => r,
-                            Err(VulkanError::OutOfDate) => {
-                                recreate_swapchain = true;
-                                return;
-                            },
-                            Err(e) => panic!("Failed to acquire next image {e}")
-                        };
-
-                    if suboptimal {
-                        recreate_swapchain = true;
-                    }
-
-                    let execution = sync::now(device.clone())
-                        .join(acquire_future)
-                        .then_execute(queue.clone(), command_buffers[image_i as usize].clone())
-                        .unwrap()
-                        .then_swapchain_present(
-                            queue.clone(), 
-                            SwapchainPresentInfo::swapchain_image_index(swapchain.clone(), image_i)
-                        )
-                        .then_signal_fence_and_flush();
-
-                    match execution.map_err(Validated::unwrap) {
-                        Ok(future) => {
-                            future.wait(None).unwrap();
-                        },
-                        Err(VulkanError::OutOfDate) => {
-                            recreate_swapchain = true;
-                        },
-                        Err(e) => {
-                            println!("Failed to flush future: {e}");
-                        }
-                    }
-                }
-                _ => ()
+        match execution.map_err(Validated::unwrap) {
+            Ok(future) => {
+                future.wait(None).unwrap();
+            },
+            Err(VulkanError::OutOfDate) => {
+                self.recreate_swapchain = true;
+            },
+            Err(e) => {
+                println!("Failed to flush future: {e}");
             }
-        });
-
-        // Self { device , queue, surface, swapchain, images, memory_allocator, command_buffer_allocator }
+        }
     }
 
-    pub fn render(&self, game_object: &GameObject) {
-        let top_left = MyVertex {
-            position: [-1.0, 1.0]
-        };
-        let top_right = MyVertex {
-            position: [0.0, 1.0]
-        };
-        let bottom_left = MyVertex {
-            position: [-1.0, -1.0]
-        };
-        let bottom_right = MyVertex {
-            position: [0.0, -1.0]
-        };
-        // let vertex_buffer = get_vertex_buffer([top_left, top_right, bottom_left, bottom_right], self.memory_allocator.clone());
-        todo!()
+    pub fn on_window_resized(&mut self) {
+        self.recreate_swapchain();
+
+        let new_dimensions = self.window.inner_size();
+
+        self.viewport.extent = new_dimensions.into();
+        self.pipeline = get_pipeline(
+            self.device.clone(), 
+            self.vertex_shader.clone(),
+            self.fragment_shader.clone(), 
+            self.render_pass.clone(), 
+            self.viewport.clone()
+        );
+    }
+
+    fn recreate_swapchain(&mut self) {
+        let new_dimensions = self.window.inner_size();
+
+        let (new_swapchain, new_images) = self.swapchain
+            .recreate(SwapchainCreateInfo {
+                image_extent: new_dimensions.into(),
+                ..self.swapchain.create_info()
+            })
+            .expect("Failed to recreate swapchain");
+
+        self.swapchain = new_swapchain;
+        self.framebuffers = get_framebuffers(&new_images, &self.render_pass.clone())
     }
 }
 
