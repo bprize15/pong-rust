@@ -1,5 +1,5 @@
 use pong::{GameObject, RenderEngine};
-use winit::{event::{DeviceEvent, Event, KeyboardInput, MouseScrollDelta, VirtualKeyCode, WindowEvent}, event_loop::{ControlFlow, EventLoop}};
+use winit::{event::{Event, KeyboardInput, VirtualKeyCode, WindowEvent}, event_loop::{ControlFlow, EventLoop}};
 
 // make static list of game objects? Then transform the list
 
@@ -7,7 +7,7 @@ fn main() {
     let event_loop = EventLoop::new();
     let mut render_engine = RenderEngine::new(&event_loop);
 
-    let mut game_object = GameObject::new(1.0, 1.0, 0.0, 0.0);
+    let mut game_object = GameObject::new(0.5, 0.05, -0.9, 0.0);
 
     event_loop.run(move |event, _, control_flow| match event {
         Event::WindowEvent { 
@@ -25,11 +25,11 @@ fn main() {
         Event::MainEventsCleared => { // Main game loop
             render_engine.render(&game_object);
         },
-        Event::DeviceEvent { // TODO: Replace with keyboard input
-            event: DeviceEvent::MouseWheel { delta: MouseScrollDelta::LineDelta(_, vertical_delta) },
+        Event::WindowEvent {
+            event: WindowEvent::KeyboardInput { input, .. },
             ..
         } => {
-            game_object.move_vertically(game_object.y + vertical_delta);
+            handle_keyboard_input(input, &mut game_object);
         }
         _ => ()
     });
@@ -41,13 +41,13 @@ fn handle_keyboard_input(keyboard_input: KeyboardInput, game_object: &mut GameOb
             virtual_keycode: Some(VirtualKeyCode::Up),
             ..
         } => {
-            game_object.move_vertically(game_object.y + 0.1);
+            game_object.move_vertically(0.1);
         },
         KeyboardInput {
             virtual_keycode: Some(VirtualKeyCode::Down),
             ..
         } => {
-            game_object.move_vertically(game_object.y - 0.1);
+            game_object.move_vertically(-0.1);
         },
         _ => ()
     };

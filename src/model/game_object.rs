@@ -10,7 +10,7 @@ impl GameObject {
         Self { height, width, x, y }
     }
 
-    pub fn move_vertically(&mut self, new_y: f32) {
-        self.y = new_y;
+    pub fn move_vertically(&mut self, y_distance: f32) {
+        self.y += -1.0 * y_distance;
     }
 }
