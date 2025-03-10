@@ -7,7 +7,11 @@ fn main() {
     let event_loop = EventLoop::new();
     let mut render_engine = RenderEngine::new(&event_loop);
 
-    let mut game_object = GameObject::new(0.5, 0.05, -0.9, 0.0);
+    let left_paddle = GameObject::new(0.5, 0.05, -0.9, 0.0);
+    let ball = GameObject::new(0.05, 0.05, 0.0, 0.0);
+    let right_paddle = GameObject::new(0.5, 0.05, 0.9, 0.0);
+
+    let mut game_objects = vec![left_paddle, ball, right_paddle];
 
     event_loop.run(move |event, _, control_flow| match event {
         Event::WindowEvent { 
@@ -23,13 +27,15 @@ fn main() {
             render_engine.on_window_resized();
         }
         Event::MainEventsCleared => { // Main game loop
-            render_engine.render(&game_object);
+            // process input
+            // update
+            render_engine.render(&game_objects);
         },
         Event::WindowEvent {
             event: WindowEvent::KeyboardInput { input, .. },
             ..
         } => {
-            handle_keyboard_input(input, &mut game_object);
+            handle_keyboard_input(input, &mut game_objects[0]);
         }
         _ => ()
     });

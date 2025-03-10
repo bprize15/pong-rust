@@ -129,12 +129,12 @@ impl RenderEngine {
         }
     }
 
-    pub fn render(&mut self, game_object: &GameObject) {
+    pub fn render(&mut self, game_objects: &Vec<GameObject>) {
         if self.recreate_swapchain {
             self.recreate_swapchain();
         }
 
-        let (vertex_buffer, index_buffer) = get_game_object_buffers(&game_object, self.memory_allocator.clone());
+        let (vertex_buffer, index_buffer) = get_game_object_buffers(game_objects, self.memory_allocator.clone());
 
         // TODO: no need to recreate index buffer
         let command_buffers = get_command_buffers(
@@ -415,22 +415,38 @@ fn get_command_buffers(
         .collect()
 }
 
-fn get_game_object_buffers(game_object: &GameObject, memory_allocator: Arc<GenericMemoryAllocator<FreeListAllocator>>) -> (Subbuffer<[MyVertex]>, Subbuffer<[u32]>) {
-    let top_left = MyVertex {
-        position: [game_object.x, game_object.y]
-    };
-    let top_right = MyVertex {
-        position: [game_object.x + game_object.width, game_object.y]
-    };
-    let bottom_left = MyVertex {
-        position: [game_object.x, game_object.y - game_object.height]
-    };
-    let bottom_right = MyVertex {
-        position: [game_object.x + game_object.width, game_object.y - game_object.height]
-    };
+fn get_game_object_buffers(game_objects: &Vec<GameObject>, memory_allocator: Arc<GenericMemoryAllocator<FreeListAllocator>>) -> (Subbuffer<[MyVertex]>, Subbuffer<[u32]>) {
+    let mut vertices: Vec<MyVertex> = Vec::new();
+    let mut indices: Vec<u32> = Vec::new();
+    for (i, game_object) in game_objects.iter().enumerate() {
+        let base_index= (i * 4) as u32;
+
+        let top_left = MyVertex {
+            position: [game_object.x, game_object.y]
+        };
+        let top_right = MyVertex {
+            position: [game_object.x + game_object.width, game_object.y]
+        };
+        let bottom_left = MyVertex {
+            position: [game_object.x, game_object.y - game_object.height]
+        };
+        let bottom_right = MyVertex {
+            position: [game_object.x + game_object.width, game_object.y - game_object.height]
+        };
+
+        vertices.push(top_left);
+        vertices.push(top_right);
+        vertices.push(bottom_left);
+        vertices.push(bottom_right);
+
+        indices.extend_from_slice(&[
+            base_index + 0, base_index + 2, base_index + 3,
+            base_index + 0, base_index + 1, base_index + 3,
+        ]);
+    }
 
     let vertex_buffer = Buffer::from_iter(
-        memory_allocator.clone(),
+        memory_allocator.clone(), 
         BufferCreateInfo {
             usage: BufferUsage::VERTEX_BUFFER,
             ..Default::default()
@@ -439,7 +455,7 @@ fn get_game_object_buffers(game_object: &GameObject, memory_allocator: Arc<Gener
             memory_type_filter: MemoryTypeFilter::PREFER_DEVICE | MemoryTypeFilter::HOST_SEQUENTIAL_WRITE,
             ..Default::default()
         }, 
-        vec![top_left, top_right, bottom_left, bottom_right]
+        vertices
     )
     .unwrap();
 
@@ -453,7 +469,7 @@ fn get_game_object_buffers(game_object: &GameObject, memory_allocator: Arc<Gener
             memory_type_filter: MemoryTypeFilter::PREFER_DEVICE | MemoryTypeFilter::HOST_SEQUENTIAL_WRITE,
             ..Default::default()
         }, 
-        vec![0, 2, 3, 0, 1, 3]
+        indices
     )
     .unwrap();
 

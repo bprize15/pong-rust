@@ -13,4 +13,13 @@ impl GameObject {
     pub fn move_vertically(&mut self, y_distance: f32) {
         self.y += -1.0 * y_distance;
     }
+
+    pub fn move_horizontally(&mut self, x_distance: f32) {
+        self.x += x_distance;
+    }
+
+    pub fn r#move(&mut self, x_distance: f32, y_distance: f32) {
+        self.move_horizontally(x_distance);
+        self.move_vertically(y_distance);
+    }
 }
