@@ -1,17 +1,37 @@
-use pong::{GameObject, RenderEngine};
+use pong::{Ball, GameObject, GameObjectState, Paddle, RenderEngine};
 use winit::{event::{Event, KeyboardInput, VirtualKeyCode, WindowEvent}, event_loop::{ControlFlow, EventLoop}};
-
-// make static list of game objects? Then transform the list
 
 fn main() {
     let event_loop = EventLoop::new();
     let mut render_engine = RenderEngine::new(&event_loop);
 
-    let left_paddle = GameObject::new(0.5, 0.05, -0.9, 0.0);
-    let ball = GameObject::new(0.05, 0.05, 0.0, 0.0);
-    let right_paddle = GameObject::new(0.5, 0.05, 0.9, 0.0);
+    let left_paddle = Paddle::new(
+        GameObjectState { 
+            height: 10, 
+            width: 2,
+            x: 1, 
+            y: 50, 
+        }, 
+    );
+    let ball = Ball::new(
+        GameObjectState { 
+            height: 2, 
+            width: 2,
+            x: 50, 
+            y: 50, 
+        }, 
+        1
+    );
+    let right_paddle = Paddle::new(
+        GameObjectState { 
+            height: 10, 
+            width: 2,
+            x: 99, 
+            y: 50, 
+        },
+    );
 
-    let mut game_objects = vec![left_paddle, ball, right_paddle];
+    let mut game_objects: Vec<Box<dyn GameObject>> = vec![Box::new(left_paddle), Box::new(ball), Box::new(right_paddle)];
 
     event_loop.run(move |event, _, control_flow| match event {
         Event::WindowEvent { 
@@ -28,8 +48,8 @@ fn main() {
         }
         Event::MainEventsCleared => { // Main game loop
             // process input
-            // update
-            render_engine.render(&game_objects);
+            render_engine.draw(&game_objects);
+            update(&mut game_objects);
         },
         Event::WindowEvent {
             event: WindowEvent::KeyboardInput { input, .. },
@@ -41,19 +61,35 @@ fn main() {
     });
 }
 
-fn handle_keyboard_input(keyboard_input: KeyboardInput, game_object: &mut GameObject) {
+fn update(game_objects: &mut Vec<Box<dyn GameObject>>) {
+    game_objects.iter_mut().for_each(|game_object| game_object.update());
+}
+
+fn handle_keyboard_input(keyboard_input: KeyboardInput, game_object: &mut Box<dyn GameObject>) {
     match keyboard_input {
         KeyboardInput {
             virtual_keycode: Some(VirtualKeyCode::Up),
             ..
         } => {
-            game_object.move_vertically(0.1);
+            game_object.r#move(0, 2);
         },
         KeyboardInput {
             virtual_keycode: Some(VirtualKeyCode::Down),
             ..
         } => {
-            game_object.move_vertically(-0.1);
+            game_object.r#move(0, -2);
+        },
+        KeyboardInput {
+            virtual_keycode: Some(VirtualKeyCode::Left),
+            ..
+        } => {
+            game_object.r#move(-2, 0);
+        },
+        KeyboardInput {
+            virtual_keycode: Some(VirtualKeyCode::Right),
+            ..
+        } => {
+            game_object.r#move(2, 0);
         },
         _ => ()
     };

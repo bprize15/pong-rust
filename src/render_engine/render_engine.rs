@@ -18,7 +18,7 @@ pub struct RenderEngine {
     fragment_shader: Arc<ShaderModule>,
     render_pass: Arc<RenderPass>,
     framebuffers: Vec<Arc<Framebuffer>>,
-    recreate_swapchain: bool
+    recreate_swapchain: bool,
 }
 
 impl RenderEngine {
@@ -129,12 +129,27 @@ impl RenderEngine {
         }
     }
 
-    pub fn render(&mut self, game_objects: &Vec<GameObject>) {
+    pub fn draw(&mut self, game_objects: &Vec<Box<dyn GameObject>>) {
+        let squares:Vec<Square> = game_objects.iter()
+            .map(|game_object| {
+                Square { 
+                    x: game_unit_to_render_unit(game_object.get_state().x) - 1.0, 
+                    y: -1.0 * (game_unit_to_render_unit(game_object.get_state().y) - 1.0),
+                    width: game_unit_to_render_unit(game_object.get_state().width),
+                    height: game_unit_to_render_unit(game_object.get_state().height)
+                }
+            })
+            .collect();
+
+        self.render(squares);
+    }
+
+    fn render(&mut self, squares: Vec<Square>) {
         if self.recreate_swapchain {
             self.recreate_swapchain();
         }
 
-        let (vertex_buffer, index_buffer) = get_game_object_buffers(game_objects, self.memory_allocator.clone());
+        let (vertex_buffer, index_buffer) = get_square_buffers(squares, self.memory_allocator.clone());
 
         // TODO: no need to recreate index buffer
         let command_buffers = get_command_buffers(
@@ -415,23 +430,23 @@ fn get_command_buffers(
         .collect()
 }
 
-fn get_game_object_buffers(game_objects: &Vec<GameObject>, memory_allocator: Arc<GenericMemoryAllocator<FreeListAllocator>>) -> (Subbuffer<[MyVertex]>, Subbuffer<[u32]>) {
+fn get_square_buffers(squares: Vec<Square>, memory_allocator: Arc<GenericMemoryAllocator<FreeListAllocator>>) -> (Subbuffer<[MyVertex]>, Subbuffer<[u32]>) {
     let mut vertices: Vec<MyVertex> = Vec::new();
     let mut indices: Vec<u32> = Vec::new();
-    for (i, game_object) in game_objects.iter().enumerate() {
+    for (i, square) in squares.iter().enumerate() {
         let base_index= (i * 4) as u32;
 
         let top_left = MyVertex {
-            position: [game_object.x, game_object.y]
+            position: [square.x, square.y]
         };
         let top_right = MyVertex {
-            position: [game_object.x + game_object.width, game_object.y]
+            position: [square.x + square.width, square.y]
         };
         let bottom_left = MyVertex {
-            position: [game_object.x, game_object.y - game_object.height]
+            position: [square.x, square.y - square.height]
         };
         let bottom_right = MyVertex {
-            position: [game_object.x + game_object.width, game_object.y - game_object.height]
+            position: [square.x + square.width, square.y - square.height]
         };
 
         vertices.push(top_left);
@@ -475,3 +490,16 @@ fn get_game_object_buffers(game_objects: &Vec<GameObject>, memory_allocator: Arc
 
     (vertex_buffer, index_buffer)
 }
+
+#[derive(Debug)]
+struct Square {
+    x: f32,
+    y: f32,
+    width: f32,
+    height: f32
+}
+
+fn game_unit_to_render_unit(game_unit: usize) -> f32 {
+    (game_unit as f32) / 50.0 // TODO: generic scale and offset
+}
+
