@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::{cell::RefCell, rc::Rc, sync::Arc};
 
 use vulkano::{buffer::{Buffer, BufferContents, BufferCreateInfo, BufferUsage, Subbuffer}, command_buffer::{allocator::StandardCommandBufferAllocator, AutoCommandBufferBuilder, CommandBufferUsage, PrimaryAutoCommandBuffer, RenderPassBeginInfo, SubpassBeginInfo, SubpassContents, SubpassEndInfo}, device::{physical::{self, PhysicalDevice}, Device, DeviceCreateInfo, DeviceExtensions, Queue, QueueCreateInfo, QueueFlags}, image::{view::ImageView, Image, ImageUsage}, instance::{Instance, InstanceCreateFlags, InstanceCreateInfo}, memory::allocator::{AllocationCreateInfo, FreeListAllocator, GenericMemoryAllocator, MemoryTypeFilter, StandardMemoryAllocator}, pipeline::{graphics::{color_blend::{ColorBlendAttachmentState, ColorBlendState}, input_assembly::InputAssemblyState, multisample::MultisampleState, rasterization::RasterizationState, vertex_input::{Vertex, VertexDefinition}, viewport::{Viewport, ViewportState}, GraphicsPipelineCreateInfo}, layout::PipelineDescriptorSetLayoutCreateInfo, GraphicsPipeline, PipelineLayout, PipelineShaderStageCreateInfo}, render_pass::{Framebuffer, FramebufferCreateInfo, RenderPass, Subpass}, shader::ShaderModule, swapchain::{self, Surface, Swapchain, SwapchainCreateInfo, SwapchainPresentInfo}, sync::{self, GpuFuture}, Validated, VulkanError, VulkanLibrary};
 use winit::{event_loop::EventLoop, window::{Window, WindowBuilder}};
@@ -129,14 +129,14 @@ impl RenderEngine {
         }
     }
 
-    pub fn draw(&mut self, game_objects: &Vec<Box<dyn GameObject>>) {
+    pub fn draw(&mut self, game_objects: &Vec<Rc<RefCell<dyn GameObject>>>) {
         let squares:Vec<Square> = game_objects.iter()
             .map(|game_object| {
                 Square { 
-                    x: game_unit_to_render_unit(game_object.get_state().x) - 1.0, 
-                    y: -1.0 * (game_unit_to_render_unit(game_object.get_state().y) - 1.0),
-                    width: game_unit_to_render_unit(game_object.get_state().width),
-                    height: game_unit_to_render_unit(game_object.get_state().height)
+                    x: game_unit_to_render_unit(game_object.borrow().get_state().x) - 1.0, 
+                    y: -1.0 * (game_unit_to_render_unit(game_object.borrow().get_state().y) - 1.0),
+                    width: game_unit_to_render_unit(game_object.borrow().get_state().width),
+                    height: game_unit_to_render_unit(game_object.borrow().get_state().height)
                 }
             })
             .collect();

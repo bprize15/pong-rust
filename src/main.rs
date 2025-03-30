@@ -1,3 +1,5 @@
+use std::{cell::RefCell, rc::Rc};
+
 use pong::{Ball, GameObject, GameObjectState, Paddle, RenderEngine};
 use winit::{event::{Event, KeyboardInput, VirtualKeyCode, WindowEvent}, event_loop::{ControlFlow, EventLoop}};
 
@@ -31,7 +33,11 @@ fn main() {
         },
     );
 
-    let mut game_objects: Vec<Box<dyn GameObject>> = vec![Box::new(left_paddle), Box::new(ball), Box::new(right_paddle)];
+    let game_objects: Vec<Rc<RefCell<dyn GameObject>>> = vec![
+        Rc::new(RefCell::new(left_paddle)),
+        Rc::new(RefCell::new(ball)),
+        Rc::new(RefCell::new(right_paddle))
+    ];
 
     event_loop.run(move |event, _, control_flow| match event {
         Event::WindowEvent { 
@@ -48,48 +54,50 @@ fn main() {
         }
         Event::MainEventsCleared => { // Main game loop
             // process input
+            update(&game_objects);
             render_engine.draw(&game_objects);
-            update(&mut game_objects);
         },
         Event::WindowEvent {
             event: WindowEvent::KeyboardInput { input, .. },
             ..
         } => {
-            handle_keyboard_input(input, &mut game_objects[0]);
+            handle_keyboard_input(input, &game_objects[0]);
         }
         _ => ()
     });
 }
 
-fn update(game_objects: &mut Vec<Box<dyn GameObject>>) {
-    game_objects.iter_mut().for_each(|game_object| game_object.update());
+fn update(game_objects: &Vec<Rc<RefCell<dyn GameObject>>>) {
+    for game_object in game_objects {
+        game_object.borrow_mut().update(game_objects);
+    }
 }
 
-fn handle_keyboard_input(keyboard_input: KeyboardInput, game_object: &mut Box<dyn GameObject>) {
+fn handle_keyboard_input(keyboard_input: KeyboardInput, game_object: &Rc<RefCell<dyn GameObject>>) {
     match keyboard_input {
         KeyboardInput {
             virtual_keycode: Some(VirtualKeyCode::Up),
             ..
         } => {
-            game_object.r#move(0, 2);
+            game_object.borrow_mut().r#move(0, 2);
         },
         KeyboardInput {
             virtual_keycode: Some(VirtualKeyCode::Down),
             ..
         } => {
-            game_object.r#move(0, -2);
+            game_object.borrow_mut().r#move(0, -2);
         },
         KeyboardInput {
             virtual_keycode: Some(VirtualKeyCode::Left),
             ..
         } => {
-            game_object.r#move(-2, 0);
+            game_object.borrow_mut().r#move(-2, 0);
         },
         KeyboardInput {
             virtual_keycode: Some(VirtualKeyCode::Right),
             ..
         } => {
-            game_object.r#move(2, 0);
+            game_object.borrow_mut().r#move(2, 0);
         },
         _ => ()
     };

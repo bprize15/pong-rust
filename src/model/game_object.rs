@@ -1,3 +1,5 @@
+use std::{cell::RefCell, ptr, rc::Rc};
+
 use crate::{MAX_POS, MIN_POS};
 
 pub trait GameObject {
@@ -21,7 +23,7 @@ pub trait GameObject {
         }
     }
 
-    fn update(&mut self);
+    fn update(&mut self, game_objects: &Vec<Rc<RefCell<dyn GameObject>>>);
 
     fn get_state(&self) -> &GameObjectState;
 
@@ -39,7 +41,7 @@ impl Paddle {
 }
 
 impl GameObject for Paddle {
-    fn update(&mut self) {}
+    fn update(&mut self, _game_object: &Vec<Rc<RefCell<dyn GameObject>>>) {}
 
     fn get_state(&self) -> &GameObjectState {
         &self.game_object_state   
@@ -60,14 +62,30 @@ impl Ball {
         Self { game_object_state, velocity }
     }
 
-    pub fn update(&mut self) {
-        self.r#move(self.velocity, 0);
+    fn is_collision(&self, game_objects: &Vec<Rc<RefCell<dyn GameObject>>>) -> bool {
+        for game_object in game_objects {
+            if ptr::addr_eq(self as &dyn GameObject, game_object.as_ptr()) {
+                continue;
+            }
+
+            if self.get_state().x < game_object.borrow().get_state().x + game_object.borrow().get_state().width &&
+                self.get_state().x + self.get_state().width > game_object.borrow().get_state().x &&
+                self.get_state().y < game_object.borrow().get_state().y + game_object.borrow().get_state().height &&
+                self.get_state().y + self.get_state().height > game_object.borrow().get_state().y
+            {
+                return true;
+            }
+        }
+        false
     }
 }
 
 impl GameObject for Ball {
-    fn update(&mut self) {
-        self.r#move(0, self.velocity);
+    fn update(&mut self, game_objects: &Vec<Rc<RefCell<dyn GameObject>>>) {
+        if self.is_collision(game_objects) {
+            self.velocity *= -1;
+        }
+        self.r#move(self.velocity, 0);
     }
 
     fn get_state(&self) -> &GameObjectState {
