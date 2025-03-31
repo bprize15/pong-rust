@@ -499,7 +499,7 @@ struct Square {
     height: f32
 }
 
-fn game_unit_to_render_unit(game_unit: usize) -> f32 {
-    (game_unit as f32) / 50.0 // TODO: generic scale and offset
+fn game_unit_to_render_unit(game_unit: f32) -> f32 {
+    game_unit / 50.0 // TODO: generic scale and offset
 }
 

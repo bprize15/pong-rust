@@ -9,27 +9,28 @@ fn main() {
 
     let left_paddle = Paddle::new(
         GameObjectState { 
-            height: 10, 
-            width: 2,
-            x: 1, 
-            y: 50, 
+            height: 10.0, 
+            width: 2.0,
+            x: 1.0, 
+            y: 50.0, 
         }, 
     );
     let ball = Ball::new(
         GameObjectState { 
-            height: 2, 
-            width: 2,
-            x: 50, 
-            y: 50, 
+            height: 2.0, 
+            width: 2.0,
+            x: 50.0, 
+            y: 50.0, 
         }, 
-        1
+        1.0,
+        0.0
     );
     let right_paddle = Paddle::new(
         GameObjectState { 
-            height: 10, 
-            width: 2,
-            x: 99, 
-            y: 50, 
+            height: 100.0, 
+            width: 2.0,
+            x: 99.0, 
+            y: 0.0, 
         },
     );
 
@@ -79,25 +80,25 @@ fn handle_keyboard_input(keyboard_input: KeyboardInput, game_object: &Rc<RefCell
             virtual_keycode: Some(VirtualKeyCode::Up),
             ..
         } => {
-            game_object.borrow_mut().r#move(0, 2);
+            game_object.borrow_mut().r#move(0.0, 4.0);
         },
         KeyboardInput {
             virtual_keycode: Some(VirtualKeyCode::Down),
             ..
         } => {
-            game_object.borrow_mut().r#move(0, -2);
+            game_object.borrow_mut().r#move(0.0, -4.0);
         },
         KeyboardInput {
             virtual_keycode: Some(VirtualKeyCode::Left),
             ..
         } => {
-            game_object.borrow_mut().r#move(-2, 0);
+            game_object.borrow_mut().r#move(-2.0, 0.0);
         },
         KeyboardInput {
             virtual_keycode: Some(VirtualKeyCode::Right),
             ..
         } => {
-            game_object.borrow_mut().r#move(2, 0);
+            game_object.borrow_mut().r#move(2.0, 0.0);
         },
         _ => ()
     };

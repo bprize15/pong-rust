@@ -3,23 +3,23 @@ use std::{cell::RefCell, ptr, rc::Rc};
 use crate::{MAX_POS, MIN_POS};
 
 pub trait GameObject {
-    fn r#move(&mut self, x_distance: i32, y_distance: i32) {
-        let new_x = self.get_state().x as i32 + x_distance;
-        if new_x < MIN_POS as i32 {
+    fn r#move(&mut self, x_distance: f32, y_distance: f32) {
+        let new_x = self.get_state().x + x_distance;
+        if new_x < MIN_POS {
             self.get_state_mut().x = MIN_POS;
-        } else if new_x + (self.get_state().width as i32) > MAX_POS as i32 {
+        } else if new_x + self.get_state().width > MAX_POS {
             self.get_state_mut().x = MAX_POS - self.get_state().width;
         } else {
-            self.get_state_mut().x = new_x as usize;
+            self.get_state_mut().x = new_x;
         }
 
-        let new_y = self.get_state().y as i32 + y_distance;
-        if new_y < MIN_POS as i32 {
+        let new_y = self.get_state().y + y_distance;
+        if new_y < MIN_POS {
             self.get_state_mut().y = MIN_POS;
-        } else if new_y + (self.get_state().height as i32) > MAX_POS as i32 {
+        } else if new_y + self.get_state().height > MAX_POS {
             self.get_state_mut().y = MAX_POS - self.get_state().height;
         } else {
-            self.get_state_mut().y = new_y as usize;
+            self.get_state_mut().y = new_y;
         }
     }
 
@@ -54,15 +54,18 @@ impl GameObject for Paddle {
 
 pub struct Ball {
     game_object_state: GameObjectState,
-    velocity: i32
+    velocity_x: f32,
+    velocity_y: f32
 }
 
 impl Ball {
-    pub fn new(game_object_state: GameObjectState, velocity: i32) -> Self {
-        Self { game_object_state, velocity }
+    pub fn new(game_object_state: GameObjectState, velocity_x: f32, velocity_y: f32) -> Self {
+        Self { game_object_state, velocity_x, velocity_y }
     }
+}
 
-    fn is_collision(&self, game_objects: &Vec<Rc<RefCell<dyn GameObject>>>) -> bool {
+impl GameObject for Ball {
+    fn update(&mut self, game_objects: &Vec<Rc<RefCell<dyn GameObject>>>) {
         for game_object in game_objects {
             if ptr::addr_eq(self as &dyn GameObject, game_object.as_ptr()) {
                 continue;
@@ -73,19 +76,19 @@ impl Ball {
                 self.get_state().y < game_object.borrow().get_state().y + game_object.borrow().get_state().height &&
                 self.get_state().y + self.get_state().height > game_object.borrow().get_state().y
             {
-                return true;
+                self.velocity_y = linear_interpolate(
+                    self.get_state().y,
+                    (game_object.borrow().get_state().y, game_object.borrow().get_state().y + game_object.borrow().get_state().height)
+                );
+                self.velocity_x *= -1.0;
             }
         }
-        false
-    }
-}
 
-impl GameObject for Ball {
-    fn update(&mut self, game_objects: &Vec<Rc<RefCell<dyn GameObject>>>) {
-        if self.is_collision(game_objects) {
-            self.velocity *= -1;
+        if self.get_state().y <= MIN_POS || self.get_state().y + self.get_state().height >= MAX_POS {
+            self.velocity_y *= -1.0;
         }
-        self.r#move(self.velocity, 0);
+
+        self.r#move(self.velocity_x, self.velocity_y);
     }
 
     fn get_state(&self) -> &GameObjectState {
@@ -97,10 +100,15 @@ impl GameObject for Ball {
     }
 }
 
+fn linear_interpolate(val: f32, source_range: (f32, f32)) -> f32 {
+    let target_range = (-1.0, 1.0);
+    target_range.0 + (val - source_range.0) * (target_range.1 - target_range.0) / (source_range.1 - source_range.0)
+}
+
 #[derive(Debug)]
 pub struct GameObjectState {
-    pub height: usize,
-    pub width: usize,
-    pub x: usize,
-    pub y: usize,
+    pub height: f32,
+    pub width: f32,
+    pub x: f32,
+    pub y: f32,
 }

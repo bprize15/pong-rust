@@ -1,2 +1,2 @@
-pub const MIN_POS: usize = 0;
-pub const MAX_POS: usize = 100;
+pub const MIN_POS: f32 = 0.0;
+pub const MAX_POS: f32 = 100.0;
