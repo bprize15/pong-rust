@@ -30,6 +30,8 @@ pub trait GameObject {
     fn get_state_mut(&mut self) -> &mut GameObjectState;
 
     fn as_paddle(&mut self) -> Option<&mut Paddle>;
+
+    fn as_ball(&self) -> Option<&Ball>;
 }
 
 pub struct Paddle {
@@ -45,7 +47,11 @@ impl Paddle {
 }
 
 impl GameObject for Paddle {
-    fn update(&mut self, _game_objects: &Vec<Rc<RefCell<dyn GameObject>>>) {
+    fn update(&mut self, game_objects: &Vec<Rc<RefCell<dyn GameObject>>>) {
+        if self.paddle_type == PaddleType::AI {
+            move_ai_paddle(self, game_objects);
+        }
+
         while let Some(move_command) = self.move_commands.pop_front() {
             match move_command {
                 MoveCommand::UP => self.r#move(0.0, 4.0),
@@ -64,6 +70,31 @@ impl GameObject for Paddle {
 
     fn as_paddle(&mut self) -> Option<&mut Self> {
         Some(self)
+    }
+
+    fn as_ball(&self) -> Option<&Ball> {
+        None
+    }
+}
+
+fn move_ai_paddle(ai_paddle: &mut Paddle, game_objects: &Vec<Rc<RefCell<dyn GameObject>>>) {
+    let ball = game_objects.iter().find(|game_object| {
+        if let Some(_) = game_object.borrow().as_ball() {
+            return true
+        }
+        false
+    })
+    .expect("No ball found")
+    .borrow();
+    let ball_y_position = ball.get_state().y;
+
+    let distance_from_ball = (ai_paddle.game_object_state.y - ball_y_position).abs();
+    if distance_from_ball > ball.get_state().height * 2.0 {
+        if ai_paddle.game_object_state.y < ball_y_position {
+            ai_paddle.move_commands.push_back(MoveCommand::UP);
+        } else if ai_paddle.game_object_state.y > ball_y_position {
+            ai_paddle.move_commands.push_back(MoveCommand::DOWN);
+        }
     }
 }
 
@@ -116,6 +147,10 @@ impl GameObject for Ball {
 
     fn as_paddle(&mut self) -> Option<&mut Paddle> {
         None
+    }
+
+    fn as_ball(&self) -> Option<&Self> {
+        Some(self)
     }
 }
 

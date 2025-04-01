@@ -11,7 +11,7 @@ fn main() {
         GameObjectState { 
             height: 10.0, 
             width: 2.0,
-            x: 1.0, 
+            x: 0.0, 
             y: 50.0, 
         }, 
         PaddleType::PLAYER
@@ -28,10 +28,10 @@ fn main() {
     );
     let right_paddle = Paddle::new(
         GameObjectState { 
-            height: 100.0, 
+            height: 10.0, 
             width: 2.0,
-            x: 99.0, 
-            y: 0.0, 
+            x: 98.0, 
+            y: 50.0, 
         },
         PaddleType::AI
     );
@@ -56,7 +56,6 @@ fn main() {
             render_engine.on_window_resized();
         }
         Event::MainEventsCleared => { // Main game loop
-            // process input
             update(&game_objects);
             render_engine.draw(&game_objects);
         },
