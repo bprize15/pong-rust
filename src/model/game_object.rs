@@ -89,7 +89,7 @@ fn move_ai_paddle(ai_paddle: &mut Paddle, game_objects: &Vec<Rc<RefCell<dyn Game
     let ball_y_position = ball.get_state().y;
 
     let distance_from_ball = (ai_paddle.game_object_state.y - ball_y_position).abs();
-    if distance_from_ball > ball.get_state().height * 2.0 {
+    if distance_from_ball > ball.get_state().height * 1.5 {
         if ai_paddle.game_object_state.y < ball_y_position {
             ai_paddle.move_commands.push_back(MoveCommand::UP);
         } else if ai_paddle.game_object_state.y > ball_y_position {
