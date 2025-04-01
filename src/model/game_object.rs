@@ -1,4 +1,4 @@
-use std::{cell::RefCell, ptr, rc::Rc};
+use std::{cell::RefCell, collections::VecDeque, ptr, rc::Rc};
 
 use crate::{MAX_POS, MIN_POS};
 
@@ -28,20 +28,31 @@ pub trait GameObject {
     fn get_state(&self) -> &GameObjectState;
 
     fn get_state_mut(&mut self) -> &mut GameObjectState;
+
+    fn as_paddle(&mut self) -> Option<&mut Paddle>;
 }
 
 pub struct Paddle {
     game_object_state: GameObjectState,
+    pub paddle_type: PaddleType,
+    pub move_commands: VecDeque<MoveCommand>
 }
 
 impl Paddle {
-    pub fn new(game_object_state: GameObjectState) -> Self {
-        Self { game_object_state }
+    pub fn new(game_object_state: GameObjectState, paddle_type: PaddleType) -> Self {
+        Self { game_object_state, paddle_type, move_commands: VecDeque::new() }
     }
 }
 
 impl GameObject for Paddle {
-    fn update(&mut self, _game_object: &Vec<Rc<RefCell<dyn GameObject>>>) {}
+    fn update(&mut self, _game_objects: &Vec<Rc<RefCell<dyn GameObject>>>) {
+        while let Some(move_command) = self.move_commands.pop_front() {
+            match move_command {
+                MoveCommand::UP => self.r#move(0.0, 4.0),
+                MoveCommand::DOWN => self.r#move(0.0, -4.0),
+            }
+        }
+    }
 
     fn get_state(&self) -> &GameObjectState {
         &self.game_object_state   
@@ -49,6 +60,10 @@ impl GameObject for Paddle {
 
     fn get_state_mut(&mut self) -> &mut GameObjectState {
         &mut self.game_object_state
+    }
+
+    fn as_paddle(&mut self) -> Option<&mut Self> {
+        Some(self)
     }
 }
 
@@ -98,6 +113,10 @@ impl GameObject for Ball {
     fn get_state_mut(&mut self) -> &mut GameObjectState {
         &mut self.game_object_state
     }
+
+    fn as_paddle(&mut self) -> Option<&mut Paddle> {
+        None
+    }
 }
 
 fn linear_interpolate(val: f32, source_range: (f32, f32)) -> f32 {
@@ -111,4 +130,15 @@ pub struct GameObjectState {
     pub width: f32,
     pub x: f32,
     pub y: f32,
+}
+
+pub enum MoveCommand {
+    UP,
+    DOWN
+}
+
+#[derive(PartialEq)]
+pub enum PaddleType {
+    PLAYER,
+    AI
 }
