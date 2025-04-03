@@ -1,4 +1,4 @@
-use std::{cell::RefCell, rc::Rc};
+use std::{cell::RefCell, rc::Rc, time::SystemTime};
 
 use pong::{Ball, GameObject, GameObjectState, MoveCommand, Paddle, PaddleType, RenderEngine};
 use winit::{event::{Event, KeyboardInput, VirtualKeyCode, WindowEvent}, event_loop::{ControlFlow, EventLoop}};
@@ -42,37 +42,53 @@ fn main() {
         Rc::new(RefCell::new(right_paddle))
     ];
 
-    event_loop.run(move |event, _, control_flow| match event {
-        Event::WindowEvent { 
-            event: WindowEvent::CloseRequested,
-            ..
-        } => {
-            *control_flow = ControlFlow::Exit;
-        },
-        Event::WindowEvent { 
-            event: WindowEvent::Resized(_),
-            ..
-        } => {
-            render_engine.on_window_resized();
-        }
-        Event::MainEventsCleared => { // Main game loop
-            update(&game_objects);
-            render_engine.draw(&game_objects);
-        },
-        Event::WindowEvent {
-            event: WindowEvent::KeyboardInput { input, .. },
-            ..
-        } => {
-            let player_paddle = game_objects.iter().find(|game_object| {
-                if let Some(paddle) = game_object.borrow_mut().as_paddle() {
-                    return paddle.paddle_type == PaddleType::PLAYER;
+    let ms_per_update: u128 = 17;
+    let mut previous = SystemTime::now();
+    let mut lag: u128 = 0;
+
+    event_loop.run(move |event, _, control_flow| {
+        match event {
+            Event::WindowEvent { 
+                event: WindowEvent::CloseRequested,
+                ..
+            } => {
+                *control_flow = ControlFlow::Exit;
+            },
+            Event::WindowEvent { 
+                event: WindowEvent::Resized(_),
+                ..
+            } => {
+                render_engine.on_window_resized();
+            }
+            Event::MainEventsCleared => { // Main game loop
+                let current = SystemTime::now();
+                let elapsed = current
+                    .duration_since(previous)
+                    .expect("Current time is earlier than previous time");
+                previous = current;
+                lag += elapsed.as_millis();
+
+                while lag >= ms_per_update {
+                    update(&game_objects);
+                    lag -= ms_per_update
                 }
-                false
-            }).
-            expect("No player paddle found");
-            handle_keyboard_input(input, player_paddle.borrow_mut().as_paddle().unwrap());
+                render_engine.draw(&game_objects);
+            },
+            Event::WindowEvent {
+                event: WindowEvent::KeyboardInput { input, .. },
+                ..
+            } => {
+                let player_paddle = game_objects.iter().find(|game_object| {
+                    if let Some(paddle) = game_object.borrow_mut().as_paddle() {
+                        return paddle.paddle_type == PaddleType::PLAYER;
+                    }
+                    false
+                }).
+                expect("No player paddle found");
+                handle_keyboard_input(input, player_paddle.borrow_mut().as_paddle().unwrap());
+            }
+            _ => ()
         }
-        _ => ()
     });
 }
 
