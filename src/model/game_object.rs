@@ -1,5 +1,7 @@
 use std::{cell::RefCell, collections::VecDeque, ptr, rc::Rc};
 
+use rand::random;
+
 use crate::{MAX_POS, MIN_POS};
 
 pub trait GameObject {
@@ -112,6 +114,23 @@ impl Ball {
 
 impl GameObject for Ball {
     fn update(&mut self, game_objects: &Vec<Rc<RefCell<dyn GameObject>>>) {
+        if self.get_state().x <= MIN_POS || self.get_state().x + self.get_state().width >= MAX_POS {
+            self.get_state_mut().x = 50.0;
+            self.get_state_mut().y = 50.0;
+            self.velocity_y = 0.0;
+            if random() {
+                self.velocity_x = 1.0
+            } else {
+                self.velocity_x = -1.0
+            }
+            if random() {
+                self.velocity_x = 1.0
+            } else {
+                self.velocity_x = -1.0
+            }
+            return;
+        }
+
         for game_object in game_objects {
             if ptr::addr_eq(self as &dyn GameObject, game_object.as_ptr()) {
                 continue;
